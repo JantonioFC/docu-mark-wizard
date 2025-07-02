@@ -83,10 +83,19 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
       
+      // Type guard function to check if item is a TextItem
+      const isTextItem = (item: any): item is { str: string; transform: number[] } => {
+        return item && 
+               typeof item === 'object' && 
+               'str' in item && 
+               'transform' in item && 
+               typeof item.str === 'string' && 
+               Array.isArray(item.transform) &&
+               item.str.trim().length > 0;
+      };
+
       // Filter and properly type text items - only keep TextItem objects
-      const textItems = textContent.items.filter((item: any): item is { str: string; transform: number[] } => {
-        return item && typeof item === 'object' && 'str' in item && 'transform' in item && item.str && item.str.trim();
-      });
+      const textItems = textContent.items.filter(isTextItem);
 
       console.log(`Page ${pageNum} has ${textItems.length} text items`);
 
