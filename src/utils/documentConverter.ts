@@ -101,12 +101,12 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       };
 
       // Filter and properly type text items - only keep TextItem objects
-      const textItems: TextItemWithTransform[] = textContent.items.filter(isTextItem);
+      const textItems = textContent.items.filter(isTextItem) as TextItemWithTransform[];
 
       console.log(`Page ${pageNum} has ${textItems.length} text items`);
 
       // Sort text items by their position (top to bottom, left to right)
-      const sortedItems: TextItemWithTransform[] = textItems.sort((a, b) => {
+      const sortedItems = textItems.sort((a, b) => {
         // First sort by Y position (top to bottom)
         const yDiff = b.transform[5] - a.transform[5];
         if (Math.abs(yDiff) > 5) { // 5 pixel threshold for same line
