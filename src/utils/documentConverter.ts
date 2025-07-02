@@ -1,4 +1,3 @@
-
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -80,15 +79,15 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
       
-      // Filter and type text items properly
+      // Filter and type text items properly - only keep TextItem objects
       const textItems = textContent.items.filter((item: any) => {
-        return item && typeof item === 'object' && 'str' in item && item.str && item.str.trim();
-      });
+        return item && typeof item === 'object' && 'str' in item && 'transform' in item && item.str && item.str.trim();
+      }) as Array<{ str: string; transform: number[]; }>;
 
       console.log(`Page ${pageNum} has ${textItems.length} text items`);
 
       // Sort text items by their position (top to bottom, left to right)
-      const sortedItems = textItems.sort((a: any, b: any) => {
+      const sortedItems = textItems.sort((a, b) => {
         if (!a.transform || !b.transform) return 0;
         
         // First sort by Y position (top to bottom)
@@ -104,8 +103,6 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       let lastY = null;
       
       for (const item of sortedItems) {
-        if (!item.transform) continue;
-        
         const currentY = item.transform[5];
         const text = item.str.trim();
         
