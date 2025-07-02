@@ -1,8 +1,11 @@
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker to use the bundled version
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Configure PDF.js worker to use the local worker from the package
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.js',
+  import.meta.url
+).toString();
 
 export const convertDocxToMarkdown = async (file: File): Promise<string> => {
   try {
@@ -61,11 +64,10 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
     const arrayBuffer = await file.arrayBuffer();
     console.log('ArrayBuffer created, size:', arrayBuffer.byteLength);
     
-    // Create a more robust PDF loading configuration
+    // Simplified PDF loading configuration
     const loadingTask = pdfjsLib.getDocument({
       data: arrayBuffer,
-      useSystemFonts: true,
-      verbosity: 0 // Reduce verbosity to minimize console output
+      verbosity: 0
     });
     console.log('PDF loading task created');
     
@@ -81,17 +83,15 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
       
-      // Filter and type text items properly - only keep TextItem objects
-      const textItems = textContent.items.filter((item: any) => {
+      // Filter and properly type text items - only keep TextItem objects
+      const textItems = textContent.items.filter((item: any): item is { str: string; transform: number[] } => {
         return item && typeof item === 'object' && 'str' in item && 'transform' in item && item.str && item.str.trim();
-      }) as Array<{ str: string; transform: number[]; }>;
+      });
 
       console.log(`Page ${pageNum} has ${textItems.length} text items`);
 
       // Sort text items by their position (top to bottom, left to right)
       const sortedItems = textItems.sort((a, b) => {
-        if (!a.transform || !b.transform) return 0;
-        
         // First sort by Y position (top to bottom)
         const yDiff = b.transform[5] - a.transform[5];
         if (Math.abs(yDiff) > 5) { // 5 pixel threshold for same line
