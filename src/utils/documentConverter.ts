@@ -1,4 +1,3 @@
-
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -22,9 +21,8 @@ export const convertDocxToMarkdown = async (file: File): Promise<string> => {
       ]
     };
 
-    // Convert ArrayBuffer to Buffer for mammoth
-    const buffer = Buffer.from(arrayBuffer);
-    const result = await mammoth.convertToHtml(buffer, options);
+    // Use ArrayBuffer directly with mammoth in browser environment
+    const result = await mammoth.convertToHtml({ arrayBuffer }, options);
     
     if (result.messages.length > 0) {
       console.warn('Conversion warnings:', result.messages);
