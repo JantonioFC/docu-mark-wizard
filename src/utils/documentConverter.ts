@@ -1,8 +1,12 @@
+
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker with matching version
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js`;
+// Configure PDF.js worker to use the local version instead of CDN
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.js',
+  import.meta.url
+).toString();
 
 export const convertDocxToMarkdown = async (file: File): Promise<string> => {
   try {
@@ -56,23 +60,37 @@ export const convertDocxToMarkdown = async (file: File): Promise<string> => {
 
 export const convertPdfToMarkdown = async (file: File): Promise<string> => {
   try {
+    console.log('Starting PDF conversion for file:', file.name, 'Size:', file.size);
+    
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    console.log('ArrayBuffer created, size:', arrayBuffer.byteLength);
+    
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    console.log('PDF loading task created');
+    
+    const pdf = await loadingTask.promise;
+    console.log('PDF loaded successfully, pages:', pdf.numPages);
     
     let fullText = '';
     const totalPages = pdf.numPages;
 
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      console.log(`Processing page ${pageNum}/${totalPages}`);
+      
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
       
-      // Properly type and filter text items
-      const textItems = textContent.items.filter((item: any) => 
-        'str' in item && item.str && item.str.trim()
-      ) as Array<{ str: string; transform: number[]; }>;
+      // Filter and type text items properly
+      const textItems = textContent.items.filter((item: any) => {
+        return item && typeof item === 'object' && 'str' in item && item.str && item.str.trim();
+      });
+
+      console.log(`Page ${pageNum} has ${textItems.length} text items`);
 
       // Sort text items by their position (top to bottom, left to right)
-      const sortedItems = textItems.sort((a, b) => {
+      const sortedItems = textItems.sort((a: any, b: any) => {
+        if (!a.transform || !b.transform) return 0;
+        
         // First sort by Y position (top to bottom)
         const yDiff = b.transform[5] - a.transform[5];
         if (Math.abs(yDiff) > 5) { // 5 pixel threshold for same line
@@ -86,6 +104,8 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       let lastY = null;
       
       for (const item of sortedItems) {
+        if (!item.transform) continue;
+        
         const currentY = item.transform[5];
         const text = item.str.trim();
         
@@ -104,6 +124,8 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
         fullText += pageText.trim() + '\n\n';
       }
     }
+
+    console.log('PDF text extraction completed, text length:', fullText.length);
 
     // Clean up the text and add basic markdown formatting
     let markdown = fullText
