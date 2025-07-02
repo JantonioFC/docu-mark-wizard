@@ -22,13 +22,33 @@ export const convertDocxToMarkdown = async (file: File): Promise<string> => {
       ]
     };
 
-    const result = await mammoth.convertToMarkdown(arrayBuffer, options);
+    // Use convertToHtml and then convert to markdown
+    const result = await mammoth.convertToHtml(arrayBuffer, options);
     
     if (result.messages.length > 0) {
       console.warn('Conversion warnings:', result.messages);
     }
 
-    return result.value || 'No se pudo extraer contenido del documento.';
+    // Convert HTML to Markdown
+    const htmlToMarkdown = (html: string): string => {
+      return html
+        .replace(/<h1>(.*?)<\/h1>/g, '# $1\n\n')
+        .replace(/<h2>(.*?)<\/h2>/g, '## $1\n\n')
+        .replace(/<h3>(.*?)<\/h3>/g, '### $1\n\n')
+        .replace(/<h4>(.*?)<\/h4>/g, '#### $1\n\n')
+        .replace(/<h5>(.*?)<\/h5>/g, '##### $1\n\n')
+        .replace(/<h6>(.*?)<\/h6>/g, '###### $1\n\n')
+        .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
+        .replace(/<em>(.*?)<\/em>/g, '*$1*')
+        .replace(/<p>(.*?)<\/p>/g, '$1\n\n')
+        .replace(/<br\s*\/?>/g, '\n')
+        .replace(/<\/?\w+[^>]*>/g, '') // Remove remaining HTML tags
+        .replace(/\n{3,}/g, '\n\n') // Normalize multiple line breaks
+        .trim();
+    };
+
+    const markdown = htmlToMarkdown(result.value || '');
+    return markdown || 'No se pudo extraer contenido del documento.';
   } catch (error) {
     console.error('Error converting DOCX:', error);
     throw new Error('Error al procesar el archivo DOCX. Asegúrate de que el archivo no esté corrupto.');
@@ -47,18 +67,21 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
       
+      // Properly type and filter text items
+      const textItems = textContent.items.filter((item: any) => 
+        'str' in item && item.str && item.str.trim()
+      ) as Array<{ str: string; transform: number[]; }>;
+
       // Sort text items by their position (top to bottom, left to right)
-      const sortedItems = textContent.items
-        .filter((item: any) => item.str && item.str.trim())
-        .sort((a: any, b: any) => {
-          // First sort by Y position (top to bottom)
-          const yDiff = b.transform[5] - a.transform[5];
-          if (Math.abs(yDiff) > 5) { // 5 pixel threshold for same line
-            return yDiff > 0 ? 1 : -1;
-          }
-          // Then sort by X position (left to right) for items on same line
-          return a.transform[4] - b.transform[4];
-        });
+      const sortedItems = textItems.sort((a, b) => {
+        // First sort by Y position (top to bottom)
+        const yDiff = b.transform[5] - a.transform[5];
+        if (Math.abs(yDiff) > 5) { // 5 pixel threshold for same line
+          return yDiff > 0 ? 1 : -1;
+        }
+        // Then sort by X position (left to right) for items on same line
+        return a.transform[4] - b.transform[4];
+      });
 
       let pageText = '';
       let lastY = null;
