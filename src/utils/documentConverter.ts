@@ -83,8 +83,14 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
       
+      // Define the TextItem interface for better type safety
+      interface TextItemWithTransform {
+        str: string;
+        transform: number[];
+      }
+
       // Type guard function to check if item is a TextItem
-      const isTextItem = (item: any): item is { str: string; transform: number[] } => {
+      const isTextItem = (item: any): item is TextItemWithTransform => {
         return item && 
                typeof item === 'object' && 
                'str' in item && 
@@ -95,12 +101,12 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       };
 
       // Filter and properly type text items - only keep TextItem objects
-      const textItems = textContent.items.filter(isTextItem);
+      const textItems: TextItemWithTransform[] = textContent.items.filter(isTextItem);
 
       console.log(`Page ${pageNum} has ${textItems.length} text items`);
 
       // Sort text items by their position (top to bottom, left to right)
-      const sortedItems = textItems.sort((a, b) => {
+      const sortedItems: TextItemWithTransform[] = textItems.sort((a, b) => {
         // First sort by Y position (top to bottom)
         const yDiff = b.transform[5] - a.transform[5];
         if (Math.abs(yDiff) > 5) { // 5 pixel threshold for same line
@@ -111,7 +117,7 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
       });
 
       let pageText = '';
-      let lastY = null;
+      let lastY: number | null = null;
       
       for (const item of sortedItems) {
         const currentY = item.transform[5];
