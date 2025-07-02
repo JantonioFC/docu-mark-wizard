@@ -1,11 +1,8 @@
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker to use the local version instead of CDN
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.js',
-  import.meta.url
-).toString();
+// Configure PDF.js worker to use the bundled version
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export const convertDocxToMarkdown = async (file: File): Promise<string> => {
   try {
@@ -64,7 +61,12 @@ export const convertPdfToMarkdown = async (file: File): Promise<string> => {
     const arrayBuffer = await file.arrayBuffer();
     console.log('ArrayBuffer created, size:', arrayBuffer.byteLength);
     
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    // Create a more robust PDF loading configuration
+    const loadingTask = pdfjsLib.getDocument({
+      data: arrayBuffer,
+      useSystemFonts: true,
+      verbosity: 0 // Reduce verbosity to minimize console output
+    });
     console.log('PDF loading task created');
     
     const pdf = await loadingTask.promise;
