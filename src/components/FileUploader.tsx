@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Upload, FileText, Download, AlertCircle } from 'lucide-react';
-import { convertDocxToMarkdown, convertPdfToMarkdown } from '@/utils/documentConverter';
+import { Upload, FileText, AlertCircle } from 'lucide-react';
+import { convertDocxToMarkdown, extractDataFromPdf, downloadDataAsMarkdown } from '@/utils/documentConverter';
 
 interface FileUploaderProps {
   onConversionComplete: (filename: string, content: string) => void;
@@ -32,34 +32,49 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onConversionComplete }) => 
     setIsConverting(true);
     setProgress(0);
     setError(null);
-    setStatus(`Convirtiendo ${file.name}...`);
+    setStatus(`Procesando ${file.name}...`);
 
     try {
       const fileExtension = file.name.toLowerCase().split('.').pop();
-      let markdownContent: string;
-
       setProgress(25);
 
       if (fileExtension === 'docx') {
-        markdownContent = await convertDocxToMarkdown(file);
+        // Para archivos DOCX, mantener la conversión a Markdown completa
+        const markdownContent = await convertDocxToMarkdown(file);
+        setProgress(75);
+        const filename = file.name.replace(/\.docx$/i, '.md');
+        onConversionComplete(filename, markdownContent);
+        setStatus(`¡Éxito! Se ha creado el archivo: ${filename}`);
       } else if (fileExtension === 'pdf') {
-        markdownContent = await convertPdfToMarkdown(file);
+        // Para archivos PDF, extraer datos específicos
+        const extractedData = await extractDataFromPdf(file);
+        setProgress(75);
+        
+        // Descargar automáticamente los datos extraídos como Markdown
+        downloadDataAsMarkdown(extractedData);
+        
+        // Crear contenido para mostrar en la preview
+        let previewContent = `# Datos Extraídos de ${extractedData.filename}\n\n`;
+        for (const key in extractedData) {
+          if (key !== 'filename') {
+            const capitalizedKey = key.charAt(0).toUpperCase() + key.slice(1);
+            previewContent += `**${capitalizedKey}:** ${extractedData[key]}\n\n`;
+          }
+        }
+        
+        const filename = file.name.replace(/\.pdf$/i, '_datos.md');
+        onConversionComplete(filename, previewContent);
+        setStatus(`¡Éxito! Datos extraídos y descargados: ${filename}`);
       } else {
         throw new Error('Formato de archivo no soportado. Solo se admiten archivos .docx y .pdf');
       }
 
-      setProgress(75);
-
-      const filename = file.name.replace(/\.(docx|pdf)$/i, '.md');
-      onConversionComplete(filename, markdownContent);
-
       setProgress(100);
-      setStatus(`¡Éxito! Se ha creado el archivo: ${filename}`);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido durante la conversión';
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido durante el procesamiento';
       setError(errorMessage);
-      setStatus('Error en la conversión');
-      console.error('Conversion error:', err);
+      setStatus('Error en el procesamiento');
+      console.error('Processing error:', err);
     } finally {
       setIsConverting(false);
       setTimeout(() => {
@@ -97,7 +112,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onConversionComplete }) => 
         <FileText className="w-16 h-16 mx-auto text-primary" />
         <h1 className="text-3xl font-bold">DocuMark Converter</h1>
         <p className="text-muted-foreground">
-          Convierte archivos .docx y .pdf a formato Markdown de forma privada y segura
+          Convierte archivos .docx a Markdown y extrae datos específicos de archivos .pdf
         </p>
       </div>
 
@@ -109,10 +124,14 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onConversionComplete }) => 
         <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
         <div className="space-y-2">
           <Label htmlFor="file-input" className="text-lg font-medium">
-            Seleccione un archivo (.docx o .pdf) para convertir
+            Seleccione un archivo (.docx o .pdf) para procesar
           </Label>
           <p className="text-sm text-muted-foreground">
             Arrastra y suelta un archivo aquí o haz clic para seleccionar
+          </p>
+          <p className="text-xs text-muted-foreground">
+            • DOCX: Conversión completa a Markdown<br/>
+            • PDF: Extracción de datos específicos (Lote, Total, etc.)
           </p>
         </div>
         
@@ -130,7 +149,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onConversionComplete }) => 
           disabled={isConverting}
           size="lg"
         >
-          {isConverting ? 'Convirtiendo...' : 'Seleccionar Archivo...'}
+          {isConverting ? 'Procesando...' : 'Seleccionar Archivo...'}
         </Button>
       </div>
 
